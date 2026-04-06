@@ -1,0 +1,338 @@
+# DataQualityEnv
+
+## Environment description
+DataQualityEnv is an OpenEnv-compliant RL environment where an agent acts as a data quality auditor.  
+For each episode, the environment generates a seeded dirty relational dataset, loads it into in-memory DuckDB, and exposes schema + row count.  
+The agent performs multi-turn SQL `SELECT` investigation and submits a structured JSON audit report for deterministic grading.
+
+## Plain-English summary
+This project trains and evaluates an AI agent that behaves like a data quality analyst.
+
+- The environment creates broken data on purpose.
+- The agent investigates the data with safe SQL queries.
+- The agent writes a final audit report.
+- The grader scores how accurately the report matches the hidden faults.
+
+In short: **inspect the data, reason about the problems, and submit a correct audit report**.
+
+### Motivation (real-world utility)
+Modern analytics pipelines fail silently when null explosions, schema drift, and referential drift go unnoticed.  
+This environment simulates a real data quality analyst workflow: inspect tables, run targeted SQL diagnostics, and submit an actionable incident report.
+
+### Why this is useful
+- It models a real job that people actually do in production.
+- It gives agents a meaningful multi-step reasoning task.
+- It provides deterministic scores, which makes it suitable for RL training and benchmarking.
+- It is safe by design because only non-destructive SQL is allowed.
+
+## How the environment works
+1. Call `reset(task_id, seed)`.
+2. The environment creates a reproducible dirty dataset and loads it into DuckDB.
+3. The agent reads the schema and row count.
+4. The agent uses `step(query)` to inspect the data.
+5. The environment returns query results and partial reward signals.
+6. When the agent is ready, it submits `step(submit_report)`.
+7. The grader compares the report with the hidden truth and returns the final score.
+
+### Score meaning
+- `1.0` = perfect audit report
+- `0.7` = partially correct, some key evidence missing
+- `0.0` = wrong or empty report
+
+## Action space
+- query: `{"action_type": "query", "sql": "SELECT ..."}`
+- submit_report: `{"action_type": "submit_report", "report": AuditReport}`
+
+## Observation space
+`task_description`, `table_name`, `schema`, `row_count`, `step`, `max_steps`, `last_query_result`, `last_action_error`
+
+## Tasks
+| ID | Name | Difficulty | What agent must find |
+|----|------|-----------|---------------------|
+| 1  | Null & duplicate detection | Easy | Null counts per column, duplicate rows |
+| 2  | Schema violation repair | Medium | Type mismatches, range violations |
+| 3  | Silent data drift | Hard | Statistical shift, new categories, referential drift |
+
+## What each task teaches
+- Task 1: basic data profiling and deduplication logic
+- Task 2: schema validation and data cleaning checks
+- Task 3: cross-snapshot drift analysis and anomaly detection
+
+## Reward design
+- Final reward (on `submit_report`) is task score in `[0.0, 1.0]` from deterministic graders.
+- Intermediate query reward gives partial credit for meaningful investigative probes.
+  - Example: detecting null-focused SQL probes, duplicate-analysis queries, cross-snapshot drift probes.
+- Safety penalty: destructive SQL attempts (`DROP`, `TRUNCATE`, etc.) return `-0.2`.
+- Efficiency penalty: repeating the exact same query incurs a small negative penalty.
+
+## Recommended way to run this project
+If you are starting from the `meta` folder, use the helper scripts:
+
+```bash
+./run_env_server.sh
+./run_high_grade_agent.sh
+```
+
+If you want to run the environment directly:
+
+```bash
+cd /Users/hemanthkunta/meta/data-quality-env
+python3 -m uvicorn env.app:app --app-dir /Users/hemanthkunta/meta/data-quality-env --host 0.0.0.0 --port 7860
+```
+
+Then verify it:
+
+```bash
+curl http://localhost:7860/health
+```
+
+## Baseline scores (seed=42, model=meta-llama/Llama-3.1-8B-Instruct)
+Task 1: ~0.82  
+Task 2: ~0.61  
+Task 3: ~0.34
+
+## Setup
+```bash
+docker build -t data-quality-env .
+docker run -p 7860:7860 \
+  -e API_BASE_URL=https://router.huggingface.co/v1 \
+  -e MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct \
+  -e HF_TOKEN=your_token \
+  -e ENV_URL=http://localhost:7860 \
+  data-quality-env
+```
+
+## Local server run
+If you are running from the `meta` folder, start the server with the helper script:
+
+```bash
+./run_env_server.sh
+```
+
+Or directly:
+
+```bash
+cd /Users/hemanthkunta/meta/data-quality-env
+python3 -m uvicorn env.app:app --app-dir /Users/hemanthkunta/meta/data-quality-env --host 0.0.0.0 --port 7860
+```
+
+## Running inference
+```bash
+python inference.py
+```
+
+## Chat-style assistant mode (ChatGPT/Gemini/Claude-like UX)
+You can run a conversational wrapper over the same OpenEnv backend:
+
+```bash
+python chat_agent.py --task-id 1 --seed 42
+```
+
+This adds a natural chat loop while preserving hackathon-required endpoints (`/reset`, `/step`, `/state`) and graders.
+
+## High-grade hybrid tool agent
+For a stronger agentic runner (policy-guided query ordering + OpenAI report polishing):
+
+```bash
+python high_grade_agent.py
+```
+
+Optional:
+- train local RL policy first and reuse it for ordering probes:
+  ```bash
+  python scripts/train_rl_agent.py train --episodes 300 --output outputs/rl_policy.json
+  RL_POLICY_PATH=outputs/rl_policy.json python high_grade_agent.py
+  ```
+
+Advanced mode details:
+- Query planning uses an explicit bank of `100,000` deterministic algorithm configurations.
+- Each candidate algorithm is checked against environment safety/step constraints before selection.
+- Selection balances coverage, statistical signal, novelty, safety risk, and efficiency.
+- SQL planning is augmented with a reusable SQL probe library (`env/sql_brain.py`) and reference guide (`SQL_AGENT_MIND.md`).
+
+Validate the 100k bank:
+```bash
+python scripts/check_100k_algorithms.py
+```
+
+Read the full SQL command/function guide:
+```bash
+cat SQL_AGENT_MIND.md
+```
+
+Run deeper multi-seed scoring (robust test):
+```bash
+python scripts/deep_evaluate_agent.py --seed-start 42 --runs 5
+```
+
+If you are in the `meta` folder:
+```bash
+python3 deep_evaluate_agent.py --seed-start 42 --runs 5
+```
+
+## Advanced shield architecture
+This project now includes all requested advanced components while staying hackathon-compliant:
+
+- **LLM reasoning**: hypothesis hints before planning (`high_grade_agent.py`)
+- **Planner-Executor-Critic loop**: LLM planner proposes extra probes, executor runs SQL tools, critic repairs final report schema
+- **RL fine-tuning**: tabular Q-learning policy training (`scripts/train_rl_agent.py`)
+- **Tool use**: SQL querying + report submission via `/step`
+- **Memory**: persistent successful plans (`env/agent_memory.py`, `outputs/agent_memory.json`)
+- **Knowledge brain**: deterministic evidence-to-report auto-fixer (`env/knowledge_brain.py`)
+- **Self-improvement loop**: iterative train + evaluate (`scripts/self_improve_loop.py`)
+- **Chat-style assistant**: multi-agent conversation wrapper (`chat_agent.py`) with planner/critic behavior
+
+If `API_BASE_URL` / `MODEL_NAME` / `HF_TOKEN` are missing, the advanced agent runs in deterministic fallback mode (no LLM calls) and still functions.
+
+Run full self-improvement cycle:
+```bash
+python scripts/self_improve_loop.py --cycles 3 --episodes-per-cycle 200
+```
+
+Or via make:
+```bash
+make self-improve
+```
+
+## Self-learning RL policy (optional advanced track)
+This repo includes a lightweight tabular Q-learning trainer that learns a query policy from shaped rewards:
+
+```bash
+python scripts/train_rl_agent.py train --episodes 300 --output outputs/rl_policy.json
+python scripts/train_rl_agent.py eval --policy outputs/rl_policy.json --episodes-per-task 5
+```
+
+If you are in the `meta` folder, you can also run the root wrapper:
+
+```bash
+python3 train_rl_agent.py train --episodes 300 --output data-quality-env/outputs/rl_policy.json
+```
+
+Notes:
+- This is a practical local RL loop over a compact action set (SQL probe selection + submit).
+- It is designed for hackathon constraints (2 vCPU / 8GB RAM, <20 minute runtime).
+- Frontier-scale LLM RL (GRPO/PPO over billions of params) is out of scope for the submission runtime budget, but this environment is compatible with external RL trainers.
+
+## Validate before submission
+```bash
+openenv validate
+./validate-submission.sh http://localhost:7860
+python scripts/local_qa.py
+python scripts/check_graders.py
+```
+
+## Troubleshooting
+- If you see `ModuleNotFoundError: No module named 'env'`, you started the server from the wrong directory. Use `./run_env_server.sh`.
+- If you see `address already in use`, the server is already running on port `7860`.
+- If the agent says the server is unreachable, run `curl http://localhost:7860/health` first.
+- If you want LLM-backed behavior, set `API_BASE_URL`, `MODEL_NAME`, and `HF_TOKEN`.
+
+## Hugging Face Spaces deployment (Docker SDK)
+1. Create a public Docker Space.
+2. Add `openenv` tag in Space settings.
+3. Set variables/secrets:
+  - `API_BASE_URL`
+  - `MODEL_NAME`
+  - `HF_TOKEN`
+  - `ENV_URL`
+4. Verify:
+  - `GET /health`
+  - `POST /reset`
+  - run `validate-submission.sh` against the Space URL.
+
+---
+
+## Description
+DataQualityEnv v2 is a budget-constrained, confidence-scored OpenEnv environment where an AI agent performs multi-step SQL auditing and optional fix verification.
+
+Core loop:
+- `reset` → environment generates seeded dirty datasets.
+- `query` → agent investigates across one or more tables.
+- `submit_report` → deterministic grading starts and fix phase unlocks.
+- `fix_sql` → agent proposes corrective updates for bonus.
+
+Novel mechanics:
+- Query budget economy (10 credits).
+- Confidence Brier grading.
+- 4 tasks (easy to expert).
+- Adversarial camouflage (`NULL`, `N/A`, `-`, near-duplicates).
+- Fix verification loop with bonus up to `+0.25`.
+
+## Action space
+1) Query
+```json
+{"action_type": "query", "sql": "SELECT * FROM customers LIMIT 10"}
+```
+
+2) Submit report
+```json
+{
+  "action_type": "submit_report",
+  "report": {
+    "null_issues": {"email": {"value": 12, "confidence": 0.92}},
+    "duplicate_row_count": {"value": 16, "confidence": 0.88},
+    "schema_violations": [],
+    "drifted_columns": [],
+    "drift_details": {},
+    "relational_issues": [],
+    "recommended_fixes": ["Add NULL checks"]
+  }
+}
+```
+
+3) Fix SQL
+```json
+{"action_type": "fix_sql", "sql": "UPDATE orders SET quantity = ABS(quantity) WHERE quantity < 0"}
+```
+
+## Observation space
+- `task_id`
+- `task_description`
+- `tables`
+- `row_counts`
+- `step`
+- `max_steps`
+- `query_credits_remaining`
+- `phase` (`audit` | `fix`)
+- `last_query_result`
+- `last_action_error`
+- `last_fix_score`
+
+## Tasks
+| ID | Name | Difficulty | What agent must find | Expected baseline |
+|----|------|-----------|---------------------|-------------------|
+| 1  | Null & duplicate detection | Easy | Nulls, disguised nulls, exact/near dups | ~0.82 |
+| 2  | Schema violation repair | Medium | Type/format/range/unparseable violations | ~0.61 |
+| 3  | Silent data drift | Hard | Mean shift, new cats, referential drift | ~0.34 |
+| 4  | Multi-table relational audit | Expert | Orphaned FKs, temporal violations, aggregate mismatches | ~0.19 |
+
+## Reward design
+- Base audit score from deterministic task grader.
+- Confidence Brier adjustment per finding.
+- Budget bonus up to `+0.10`.
+- Fix bonus up to `+0.25`.
+
+Formula:
+
+`total = min(1.25, audit_score × brier_adj + budget_bonus + fix_bonus)`
+
+## Baseline scores (multi-seed robustness)
+| Seed | Task 1 | Task 2 | Task 3 | Task 4 | Mean |
+|------|--------|--------|--------|--------|------|
+| 42   | X.XX   | X.XX   | X.XX   | X.XX   | X.XX |
+| 123  | X.XX   | X.XX   | X.XX   | X.XX   | X.XX |
+| 777  | X.XX   | X.XX   | X.XX   | X.XX   | X.XX |
+
+## Running inference
+```bash
+ENV_URL=http://localhost:7860 \
+API_BASE_URL=https://router.huggingface.co/v1 \
+MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct \
+HF_TOKEN=your_token \
+python inference.py
+```
+
+## Validation
+```bash
+./validate-submission.sh https://your-space.hf.space
+```

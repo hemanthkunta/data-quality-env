@@ -1,0 +1,24 @@
+{
+  "runs": [
+    {
+      "task_1": 0.7,
+      "task_2": 1.0,
+      "task_3": 0.7,
+      "mean": 0.8,
+      "seed": 42.0
+    },
+    {
+      "task_1": 0.7,
+      "task_2": 1.0,
+      "task_3": 0.7,
+      "mean": 0.8,
+      "seed": 43.0
+    }
+  ],
+  "aggregate": {
+    "task_1_avg": 0.7,
+    "task_2_avg": 1.0,
+    "task_3_avg": 0.7,
+    "mean_avg": 0.8
+  }
+}

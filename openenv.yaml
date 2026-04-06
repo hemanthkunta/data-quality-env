@@ -1,0 +1,85 @@
+name: data-quality-env
+version: "2.0.0"
+description: >
+  RL environment where an AI agent acts as a data quality auditor.
+  Multi-table, adversarial injection, budget-constrained exploration,
+  confidence-calibrated Brier grading, and post-audit fix verification loop.
+author: ""
+license: MIT
+tags:
+  - openenv
+  - data-quality
+  - sql
+  - rl-environment
+  - multi-table
+  - adversarial
+
+tasks:
+  - id: 1
+    name: null_and_duplicate_detection
+    difficulty: easy
+    max_steps: 12
+    description: "Find real nulls, disguised nulls (stored as 'N/A'/'NULL'), exact duplicates, and near-duplicates in a customers table."
+    expected_baseline_score: 0.82
+
+  - id: 2
+    name: schema_violation_repair
+    difficulty: medium
+    max_steps: 12
+    description: "Detect type violations, format violations, range violations, and unparseable values in an orders table."
+    expected_baseline_score: 0.61
+
+  - id: 3
+    name: silent_data_drift_detection
+    difficulty: hard
+    max_steps: 12
+    description: "Compare two transaction snapshots. Detect mean shifts, new category values, and referential drift — nothing is labelled wrong."
+    expected_baseline_score: 0.34
+
+  - id: 4
+    name: multi_table_relational_audit
+    difficulty: expert
+    max_steps: 12
+    description: "Audit 3 joined tables (customers, orders, line_items). Find orphaned FKs, temporal violations, and aggregate mismatches using JOIN queries."
+    expected_baseline_score: 0.19
+
+action_space:
+  type: json
+  actions:
+    - name: query
+      description: "Execute a SELECT query. Costs 1 query credit. Blocked: DROP/DELETE/UPDATE/CREATE."
+      fields: {sql: string}
+    - name: submit_report
+      description: "Submit the structured AuditReport. Triggers grading. Unlocks fix phase."
+      fields: {report: AuditReport}
+    - name: fix_sql
+      description: "Post-audit: submit corrective UPDATE SQL. Earns fix bonus up to +0.25."
+      fields: {sql: string}
+
+observation_space:
+  fields:
+    task_id: int
+    task_description: string
+    tables: "dict[table_name -> dict[col -> dtype]]"
+    row_counts: "dict[table_name -> int]"
+    step: int
+    max_steps: int
+    query_credits_remaining: int
+    phase: "audit | fix"
+    last_query_result: "list[dict] | null  (max 50 rows)"
+    last_action_error: "string | null"
+    last_fix_score: "float | null"
+
+reward_range: [-0.1, 1.25]
+
+reward_design:
+  audit_score: "0.0–1.0, Brier-adjusted per finding confidence"
+  budget_bonus: "up to +0.10 for early report submission"
+  fix_bonus: "up to +0.25 for correct fix_sql repairs"
+  destructive_sql_penalty: -0.1
+
+api:
+  reset: "POST /reset  {task_id: int, seed: int}"
+  step:  "POST /step   {action: Action}"
+  state: "GET  /state"
+  health: "GET /health"
