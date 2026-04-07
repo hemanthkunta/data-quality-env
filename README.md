@@ -1,5 +1,12 @@
 # DataQualityEnv
-
+---
+title: data-quality-env
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
 ## Environment description
 DataQualityEnv is an OpenEnv-compliant RL environment where an agent acts as a data quality auditor.  
 For each episode, the environment generates a seeded dirty relational dataset, loads it into in-memory DuckDB, and exposes schema + row count.  
