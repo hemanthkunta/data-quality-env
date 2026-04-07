@@ -16,6 +16,106 @@ openenv validate
 ## Description
 DataQualityEnv v2 is a budget-constrained, confidence-scored OpenEnv environment where an AI agent performs multi-step SQL auditing and optional fix verification.
 
+## 🚀 How to Use
+
+### Step 1: Reset the Environment
+Click **"Reset episode"** to start a new task.
+
+You will see:
+- task description
+- table schema
+- step budget and query credits
+
+---
+
+### Step 2: Investigate with SQL Queries
+
+Run SQL queries to explore the data and identify issues.
+
+Examples:
+
+```sql
+SELECT COUNT(*) FROM customers;
+
+SELECT SUM(CASE WHEN email IS NULL THEN 1 ELSE 0 END) FROM customers;
+
+SELECT customer_id, email, COUNT(*) 
+FROM customers 
+GROUP BY 1,2 
+HAVING COUNT(*) > 1;
+💡 Note:
+
+Queries help you gather evidence
+They may return small rewards or penalties
+Final scoring does NOT happen here
+Step 3: Submit Audit Report (IMPORTANT)
+
+After analysis, submit your findings using:
+Observation json: {
+  "null_issues": {
+    "email": 12,
+    "customer_id": 0
+  },
+  "duplicate_row_count": 15,
+  "near_duplicate_count": 9,
+  "confidence": 0.9
+}
+submit: {
+  "null_issues": {
+    "email": 12,
+    "customer_id": 0
+  },
+  "duplicate_row_count": 15,
+  "near_duplicate_count": 9,
+  "confidence": 0.9
+}
+📌 This step triggers:
+
+deterministic grading
+final score calculation (0.0 – 1.0)
+
+⚠️ Important:
+
+Running queries alone will NOT produce a final score.
+You must submit a report.
+
+Step 4: Fix Phase (Optional)
+
+After submitting the report, the environment enters fix phase.
+
+You can propose fixes using SQL:
+UPDATE customers SET email = NULL WHERE email = 'UNKNOWN';
+This may improve your score.
+
+Step 5: Final Result
+
+You will receive:
+
+{
+  "value": 0.85,
+  "done": true
+}
+value → final score
+done → task completed
+🤖 Auto Audit Mode
+
+You can also click "Auto audit", which:
+
+runs multiple diagnostic SQL queries
+generates a report automatically
+submits it before step limit
+
+This is the fastest way to test the system.
+
+🧠 Reward System
+Queries may return small penalties (e.g., -0.1) for redundant or low-value actions
+This encourages efficient exploration
+Final score depends ONLY on the submitted report
+⚠️ Important Notes
+Always submit a report before step limit
+If you don't, the system may auto-submit a fallback report
+Efficient querying leads to better performance
+
 Core loop:
 - `reset` → environment generates seeded dirty datasets.
 - `query` → agent investigates across one or more tables.
