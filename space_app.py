@@ -247,6 +247,21 @@ def _health() -> dict[str, str]:
     return health()
 
 
+@fastapi_app.post("/reset")
+def _reset(payload: dict) -> dict:
+    return SESSION.reset(payload)
+
+
+@fastapi_app.post("/step")
+def _step(payload: dict) -> dict:
+    return SESSION.step(payload)
+
+
+@fastapi_app.get("/state")
+def _state() -> dict:
+    return SESSION.state()
+
+
 with gr.Blocks(title="DataQualityEnv") as demo:
     gr.Markdown(
         "# DataQualityEnv\n"
