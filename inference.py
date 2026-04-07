@@ -85,6 +85,21 @@ def call_env(endpoint: str, payload=None, method: str = "POST"):
     return BACKEND.call(endpoint, payload)
 
 
+def emit_block(kind: str, **fields) -> None:
+    parts = [f"[{kind}]"]
+    for key, value in fields.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            text = "true" if value else "false"
+        elif isinstance(value, float):
+            text = f"{value:.6f}".rstrip("0").rstrip(".")
+        else:
+            text = str(value)
+        parts.append(f"{key}={text}")
+    print(" ".join(parts), flush=True)
+
+
 def parse_action(text: str) -> dict:
     raw = (text or "").strip()
     raw = raw.replace("```json", "").replace("```", "").strip()
@@ -419,6 +434,7 @@ def run_task_hybrid(task_id: int, global_start: float) -> float:
     if client is None:
         raise RuntimeError("OpenAI client not initialized")
     obs = call_env("reset", {"task_id": task_id, "seed": SEED})
+    emit_block("START", task=task_id, mode="hybrid", seed=SEED)
     print(f"\n{'='*60}")
     print(f"Task {task_id}: {obs['task_description'][:100]}...")
     print(f"Tables: {list(obs['tables'].keys())} | Credits: {obs['query_credits_remaining']}")
@@ -432,19 +448,23 @@ def run_task_hybrid(task_id: int, global_start: float) -> float:
 
     out = submit(final_report)
     score = float(out.get("reward", {}).get("value", 0.0))
+    emit_block("STEP", task=task_id, step=1, reward=score, action="submit_report")
 
     # Optional harmless fix step for bonus phase behavior parity.
     try:
         fix = call_env("step", {"action": {"action_type": "fix_sql", "sql": "UPDATE orders SET order_total = order_total WHERE 1=0"}})
         score = float(fix.get("reward", {}).get("value", score))
+        emit_block("STEP", task=task_id, step=2, reward=score, action="fix_sql")
     except Exception:
         pass
     print(f"  Episode done. Final score: {score:.3f}")
+    emit_block("END", task=task_id, score=score, steps=2)
     return score
 
 
 def run_task_heuristic(task_id: int) -> float:
     obs = call_env("reset", {"task_id": task_id, "seed": SEED})
+    emit_block("START", task=task_id, mode="heuristic", seed=SEED)
     print(f"\n{'='*60}")
     print(f"Task {task_id}: {obs['task_description'][:100]}...")
     print("Mode: deterministic heuristic fallback")
@@ -544,13 +564,16 @@ def run_task_heuristic(task_id: int) -> float:
     out = submit(report)
     score = float(out.get("reward", {}).get("value", 0.0))
     print(f"  audit score: {score:.3f}")
+    emit_block("STEP", task=task_id, step=1, reward=score, action="submit_report")
     # One no-op fix to demonstrate fix phase behavior.
     try:
         fix = call_env("step", {"action": {"action_type": "fix_sql", "sql": "UPDATE orders SET order_total = order_total WHERE 1=0"}})
         score = float(fix.get("reward", {}).get("value", score))
+        emit_block("STEP", task=task_id, step=2, reward=score, action="fix_sql")
     except Exception:
         pass
     print(f"  final score: {score:.3f}")
+    emit_block("END", task=task_id, score=score, steps=2)
     return score
 
 
@@ -558,6 +581,7 @@ def run_task(task_id: int, global_start: float) -> float:
     if client is None:
         raise RuntimeError("OpenAI client not initialized")
     obs = call_env("reset", {"task_id": task_id, "seed": SEED})
+    emit_block("START", task=task_id, mode="llm", seed=SEED)
     print(f"\n{'='*60}")
     print(f"Task {task_id}: {obs['task_description'][:100]}...")
     print(f"Tables: {list(obs['tables'].keys())} | Credits: {obs['query_credits_remaining']}")
@@ -623,9 +647,11 @@ Return next action JSON only."""
 
         history.append({"step": step, "action": action.get("action_type", "unknown")})
         final_score = float(reward.get("value", final_score))
+        emit_block("STEP", task=task_id, step=step, reward=final_score, action=action.get("action_type", "unknown"))
 
         if reward.get("done"):
             print(f"  Episode done. Final score: {final_score:.3f}")
+            emit_block("END", task=task_id, score=final_score, steps=step)
             return final_score
 
     empty_report = {
@@ -645,6 +671,7 @@ Return next action JSON only."""
         final_score = float(result.get("reward", {}).get("value", final_score))
     except Exception:
         pass
+    emit_block("END", task=task_id, score=final_score, steps=total_steps)
     return final_score
 
 
