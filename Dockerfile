@@ -7,4 +7,4 @@ COPY . .
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 	CMD sh -c 'curl -f http://localhost:${PORT:-7860}/health || exit 1'
-CMD ["sh", "-c", "uvicorn env.app:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]
+CMD ["sh", "-c", "uvicorn space_app:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]

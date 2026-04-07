@@ -17,7 +17,13 @@ git push
 - `API_BASE_URL=https://router.huggingface.co/v1`
 - `MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct`
 - `HF_TOKEN=<your token>`
-- `ENV_URL=http://localhost:7860`
+- `ENV_URL` is no longer needed for the Space UI path.
+
+Notes:
+- Keep these Space secrets configured so the deployment stays healthy during the evaluation window.
+- The Space app now runs in-process through `space_app.py` and Gradio.
+- Judge runs are separate: they still inject `API_BASE_URL`, `HF_TOKEN`, and `MODEL_NAME` when executing `python inference.py`.
+- Do not rely on hardcoded model credentials or `ENV_URL` in the Space path.
 
 ## 4) Verify endpoints
 ```bash

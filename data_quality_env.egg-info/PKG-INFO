@@ -1,3 +1,20 @@
+Metadata-Version: 2.4
+Name: data-quality-env
+Version: 1.0.0
+Summary: OpenEnv RL environment for SQL data quality auditing
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: openenv-core>=0.2.0
+Requires-Dist: fastapi>=0.111.0
+Requires-Dist: uvicorn>=0.29.0
+Requires-Dist: duckdb>=0.10.3
+Requires-Dist: pydantic>=2.7.1
+Requires-Dist: pandas>=2.2.2
+Requires-Dist: numpy>=1.26.4
+Requires-Dist: pyarrow>=16.1.0
+Requires-Dist: openai>=2.7.2
+Requires-Dist: requests>=2.31.0
+
 # DataQualityEnv
 
 ## Environment description
@@ -241,10 +258,9 @@ python scripts/check_graders.py
   - `API_BASE_URL`
   - `MODEL_NAME`
   - `HF_TOKEN`
-  - `ENV_URL` is not required for the Space UI path.
+  - `ENV_URL`
   - Keep these set in the Space even during evaluation so the app remains healthy 24/7.
   - Judges still inject their own values when they run `inference.py`.
-4. The Space entrypoint is `space_app.py`, which mounts a Gradio UI and calls the environment in-process.
 4. Verify:
   - `GET /health`
   - `POST /reset`

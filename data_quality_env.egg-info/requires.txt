@@ -1,0 +1,10 @@
+openenv-core>=0.2.0
+fastapi>=0.111.0
+uvicorn>=0.29.0
+duckdb>=0.10.3
+pydantic>=2.7.1
+pandas>=2.2.2
+numpy>=1.26.4
+pyarrow>=16.1.0
+openai>=2.7.2
+requests>=2.31.0

@@ -13,11 +13,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-import requests
 from openai import OpenAI
 from env.algorithm_bank import order_queries_with_100k_algorithms
 from env.agent_memory import MemoryItem, MemoryStore
 from env.knowledge_brain import KnowledgeBrain
+from env.inprocess_backend import BACKEND
 from env.reasoning_stack import (
     build_plan_prompt,
     parse_plan_json,
@@ -29,7 +29,6 @@ from env.sql_brain import probes_for_task
 API_BASE_URL = os.environ.get("API_BASE_URL", "")
 MODEL_NAME = os.environ.get("MODEL_NAME", "")
 API_KEY = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY", "")
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860").rstrip("/")
 POLICY_PATH = os.environ.get("RL_POLICY_PATH", "outputs/rl_policy.json")
 MEMORY_PATH = os.environ.get("AGENT_MEMORY_PATH", "outputs/agent_memory.json")
 SEED = int(os.environ.get("SEED", "42"))
@@ -68,13 +67,7 @@ def as_float(v: Any, default: float = 0.0) -> float:
 
 
 def call_env(endpoint: str, payload: dict | None = None, method: str = "POST") -> dict:
-    url = f"{ENV_URL}/{endpoint}"
-    if method == "POST":
-        r = requests.post(url, json=payload or {}, timeout=30)
-    else:
-        r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    return r.json()
+    return BACKEND.call(endpoint, payload)
 
 
 def llm_polish(task_id: int, report: dict, evidence: dict) -> dict:
