@@ -101,7 +101,7 @@ def step(payload: dict):
             result = engine.execute(action.sql)
             if isinstance(result, str) and result.startswith("ERROR"):
                 obs = _make_observation(task, state, engine, table_names, None, result, None)
-                reward = Reward(value=-0.1, breakdown=_zero_breakdown(destructive=-0.1), done=False, info={"error": result})
+                reward = Reward(value=0.0, breakdown=_zero_breakdown(), done=False, info={"error": result})
             else:
                 state.query_credits -= 1
                 obs = _make_observation(task, state, engine, table_names, result if isinstance(result, list) else None, None, None)

@@ -72,6 +72,36 @@ def heuristic_queries(task_id: int) -> list[str]:
     ]
 
 
+def current_tables(obs: dict[str, Any] | None) -> set[str]:
+    tables = (obs or {}).get("tables") or {}
+    return {str(name).lower() for name in tables.keys()}
+
+
+def referenced_tables(sql_text: str) -> set[str]:
+    sql = normalize_command(sql_text)
+    matches = re.finditer(r"\b(?:from|join)\s+([a-zA-Z_][\w\.]*)", sql, flags=re.IGNORECASE)
+    refs: set[str] = set()
+    for match in matches:
+        identifier = match.group(1).split(".")[-1].lower()
+        if identifier:
+            refs.add(identifier)
+    return refs
+
+
+def validate_query_tables(sql_text: str, obs: dict[str, Any] | None) -> str | None:
+    allowed = current_tables(obs)
+    if not allowed:
+        return None
+    refs = referenced_tables(sql_text)
+    if not refs:
+        return None
+    unknown = sorted(refs - allowed)
+    if unknown:
+        available = ", ".join(sorted(allowed))
+        return f"This task only exposes: {available}. Please query one of those tables instead of: {', '.join(unknown)}."
+    return None
+
+
 def normalize_command(text: str) -> str:
     return (text or "").strip()
 
@@ -143,6 +173,11 @@ def run_query(sql_text: str, current_obs: dict[str, Any] | None, chat: list[dict
         chat = chat + [{"role": "assistant", "content": "Send a SQL query first."}]
         return chat, format_observation(current_obs), session_status(current_obs), format_reward({}), current_obs
 
+    table_error = validate_query_tables(sql, current_obs)
+    if table_error:
+        chat = chat + [{"role": "assistant", "content": table_error}]
+        return chat, format_observation(current_obs), session_status(current_obs), format_reward({"value": 0.0, "done": False}), current_obs
+
     out = SESSION.step({"action": {"action_type": "query", "sql": sql}})
     obs = out.get("observation")
     reward = out.get("reward")
@@ -180,6 +215,10 @@ def auto_audit(current_obs: dict[str, Any] | None, chat: list[dict[str, str]]):
     obs = current_obs
     reward = None
     for sql in queries:
+        table_error = validate_query_tables(sql, obs)
+        if table_error:
+            running_chat.append({"role": "assistant", "content": table_error})
+            continue
         out = SESSION.step({"action": {"action_type": "query", "sql": sql}})
         obs = out.get("observation")
         reward = out.get("reward")

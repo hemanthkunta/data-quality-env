@@ -70,7 +70,7 @@ observation_space:
     last_action_error: "string | null"
     last_fix_score: "float | null"
 
-reward_range: [-0.1, 1.25]
+reward_range: [0.0, 1.25]
 
 reward_design:
   audit_score: "0.0–1.0, Brier-adjusted per finding confidence"
@@ -78,7 +78,7 @@ reward_design:
   valid_query_finds_issue: "+0.1 for valid SQL that surfaces NULLs, duplicates, or other clear audit evidence"
   budget_bonus: "up to +0.10 for early report submission"
   fix_bonus: "up to +0.25 for correct fix_sql repairs"
-  destructive_sql_penalty: -0.1
+  invalid_sql_penalty: 0.0
 
 api:
   reset: "POST /reset  {task_id: int, seed: int}"
