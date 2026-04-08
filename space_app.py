@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 import gradio as gr
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 
 from env.inprocess_backend import BACKEND
 
@@ -248,12 +248,16 @@ def _health() -> dict[str, str]:
 
 
 @fastapi_app.post("/reset")
-def _reset(payload: dict) -> dict:
+def _reset(payload: dict = Body(default_factory=dict)) -> dict:
+    payload = payload or {}
+    payload.setdefault("task_id", 1)
+    payload.setdefault("seed", 42)
     return SESSION.reset(payload)
 
 
 @fastapi_app.post("/step")
-def _step(payload: dict) -> dict:
+def _step(payload: dict = Body(default_factory=dict)) -> dict:
+    payload = payload or {}
     return SESSION.step(payload)
 
 
