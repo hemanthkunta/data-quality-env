@@ -452,7 +452,7 @@ def run_task(task_id: int, q_table: dict[str, list[float]], memory: MemoryStore)
             evidence={"task_id": task_id, "score": score},
         )
     )
-    print(f"  Done. Score: {score:.3f} | Breakdown: {reward.get('breakdown', {})}")
+    print(f"  Done. Score: {score:.6f} | Breakdown: {reward.get('breakdown', {})}")
     return score
 
 
@@ -465,9 +465,9 @@ def main() -> None:
     memory.save()
     print("\n=== HIGH-GRADE AGENT RESULTS ===")
     for k, v in scores.items():
-        print(f"  {k}: {v:.3f}")
+        print(f"  {k}: {v:.6f}")
     mean_score = BaseTask.strict_score(sum(scores.values()) / len(scores))
-    print(f"  mean: {mean_score:.3f}")
+    print(f"  mean: {mean_score:.6f}")
 
 
 if __name__ == "__main__":

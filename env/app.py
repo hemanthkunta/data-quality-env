@@ -75,7 +75,7 @@ def step(payload: dict):
 
         if state.step > MAX_STEPS:
             state.done = True
-            total = round(min(1.25, state.audit_score + state.fix_bonus), 4)
+            total = BaseTask.strict_score(round(min(1.25, state.audit_score + state.fix_bonus), 4))
             rb = RewardBreakdown(
                 base_audit_score=state.audit_score,
                 confidence_brier_adjustment=0.0,
@@ -145,7 +145,7 @@ def step(payload: dict):
 
             if state.fix_steps_remaining <= 0:
                 state.done = True
-                total = round(min(1.25, state.audit_score + state.fix_bonus), 4)
+                total = BaseTask.strict_score(round(min(1.25, state.audit_score + state.fix_bonus), 4))
                 rb = RewardBreakdown(
                     base_audit_score=state.audit_score,
                     confidence_brier_adjustment=0.0,
@@ -163,7 +163,7 @@ def step(payload: dict):
             if done:
                 state.done = True
 
-            total = round(min(1.25, state.audit_score + state.fix_bonus), 4)
+            total = BaseTask.strict_score(round(min(1.25, state.audit_score + state.fix_bonus), 4))
             rb = RewardBreakdown(
                 base_audit_score=state.audit_score,
                 confidence_brier_adjustment=0.0,
