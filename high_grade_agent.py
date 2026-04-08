@@ -25,6 +25,7 @@ from env.reasoning_stack import (
     validate_and_repair_report,
 )
 from env.sql_brain import probes_for_task
+from tasks.base import BaseTask
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "")
 MODEL_NAME = os.environ.get("MODEL_NAME", "")
@@ -439,7 +440,7 @@ def run_task(task_id: int, q_table: dict[str, list[float]], memory: MemoryStore)
 
     out = call_env("step", {"action": {"action_type": "submit_report", "report": report}})
     reward = out.get("reward", {})
-    score = as_float(reward.get("value", 0.0))
+    score = BaseTask.strict_score(as_float(reward.get("value", 0.0)))
 
     # Persist successful behavior to memory for future episodes.
     memory.add(
@@ -465,7 +466,8 @@ def main() -> None:
     print("\n=== HIGH-GRADE AGENT RESULTS ===")
     for k, v in scores.items():
         print(f"  {k}: {v:.3f}")
-    print(f"  mean: {sum(scores.values())/len(scores):.3f}")
+    mean_score = BaseTask.strict_score(sum(scores.values()) / len(scores))
+    print(f"  mean: {mean_score:.3f}")
 
 
 if __name__ == "__main__":

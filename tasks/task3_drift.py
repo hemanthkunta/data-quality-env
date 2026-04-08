@@ -57,4 +57,4 @@ class Task3(BaseTask):
 
         weights = {"mean_shift": 0.40, "new_cats": 0.35, "ref_drift": 0.25}
         total = sum(scores[k] * weights[k] for k in weights)
-        return round(min(1.0, total), 4), scores
+        return self.strict_score(round(total, 4)), scores

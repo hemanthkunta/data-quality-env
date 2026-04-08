@@ -39,4 +39,4 @@ class Task1(BaseTask):
 
         weights = {"null_email": 0.30, "null_cid": 0.25, "exact_dups": 0.30, "near_dups": 0.15}
         total = sum(scores[k] * weights[k] for k in weights)
-        return round(min(1.0, total), 4), scores
+        return self.strict_score(round(total, 4)), scores

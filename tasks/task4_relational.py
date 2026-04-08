@@ -50,4 +50,4 @@ class Task4(BaseTask):
 
         weights = {"orphans": 0.40, "temporal": 0.35, "aggregates": 0.25}
         total = sum(scores[k] * weights[k] for k in weights)
-        return round(min(1.0, total), 4), scores
+        return self.strict_score(round(total, 4)), scores

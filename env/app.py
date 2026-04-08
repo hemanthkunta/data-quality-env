@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from env.dataset_gen import generate_dataset
 from env.engine import SQLEngine
 from env.models import Action, EpisodeState, Observation, Reward, RewardBreakdown
+from tasks.base import BaseTask
 from tasks.task1_nulls import Task1
 from tasks.task2_schema import Task2
 from tasks.task3_drift import Task3
@@ -116,7 +117,7 @@ def step(payload: dict):
 
             base_score, score_breakdown = task.grade(action.report, gold)
             budget_bonus = round(min(0.10, state.query_credits * 0.01), 4)
-            total = round(min(1.0, base_score + budget_bonus), 4)
+            total = BaseTask.strict_score(round(min(1.0, base_score + budget_bonus), 4))
 
             state.audit_score = total
             state.report_submitted = True
