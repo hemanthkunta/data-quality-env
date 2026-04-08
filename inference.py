@@ -29,7 +29,7 @@ MAX_TOKENS = 1000
 MAX_AUDIT_STEPS = 9
 FIX_STEPS = 3
 WALL_LIMIT = 15 * 60
-SCORE_EPS = 1e-6
+SCORE_EPS = 0.1
 
 SYSTEM_PROMPT = """You are a SQL Data Auditor.
 
@@ -104,7 +104,7 @@ def emit_block(kind: str, **fields) -> None:
         if isinstance(value, bool):
             text = "true" if value else "false"
         elif isinstance(value, float):
-            text = f"{value:.6f}".rstrip("0").rstrip(".")
+            text = f"{value:.1f}"
         else:
             text = str(value)
         parts.append(f"{key}={text}")
@@ -112,21 +112,21 @@ def emit_block(kind: str, **fields) -> None:
 
 
 def strict_score(value: float | int | str | None, default: float = SCORE_EPS) -> float:
-    """Clamp score into strict open interval (0,1) for validator compatibility."""
+    """Clamp score to one decimal strictly between 0 and 1 (practical range 0.1..0.9)."""
     try:
         v = float(value)
     except Exception:
         v = float(default)
-    if not (v > 0.0):
-        return SCORE_EPS
-    if not (v < 1.0):
-        return 1.0 - SCORE_EPS
-    return v
+    if v < 0.1:
+        v = 0.1
+    if v > 0.9:
+        v = 0.9
+    return round(v, 1)
 
 
 def score_text(value: float | int | str | None, default: float = SCORE_EPS) -> str:
-    """Stable string formatting for printed score lines without rounding to 1.000."""
-    return f"{strict_score(value, default=default):.6f}"
+    """One-decimal score text format."""
+    return f"{strict_score(value, default=default):.1f}"
 
 
 def parse_action(text: str) -> dict:
