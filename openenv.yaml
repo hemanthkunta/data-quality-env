@@ -74,6 +74,8 @@ reward_range: [-0.1, 1.25]
 
 reward_design:
   audit_score: "0.0–1.0, Brier-adjusted per finding confidence"
+  valid_query_no_signal: "+0.01 for syntactically valid exploratory SQL that returns no obvious issue signal"
+  valid_query_finds_issue: "+0.1 for valid SQL that surfaces NULLs, duplicates, or other clear audit evidence"
   budget_bonus: "up to +0.10 for early report submission"
   fix_bonus: "up to +0.25 for correct fix_sql repairs"
   destructive_sql_penalty: -0.1

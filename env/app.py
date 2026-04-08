@@ -104,7 +104,8 @@ def step(payload: dict):
             else:
                 state.query_credits -= 1
                 obs = _make_observation(task, state, engine, table_names, result if isinstance(result, list) else None, None, None)
-                reward = Reward(value=0.0, breakdown=_zero_breakdown(), done=False, info={})
+                query_reward = _query_reward(action.sql, result if isinstance(result, list) else None)
+                reward = Reward(value=query_reward, breakdown=_zero_breakdown(), done=False, info={})
             return _step_response(obs, reward)
 
         if action.action_type == "submit_report":
@@ -213,3 +214,27 @@ def _zero_breakdown(destructive: float = 0.0) -> RewardBreakdown:
         fix_verification_bonus=destructive,
         total=destructive,
     )
+
+
+def _query_reward(sql: str, result: list[dict[str, Any]] | None) -> float:
+    """Provide small positive rewards for valid exploration and stronger credit for finding obvious issues."""
+    rows = result or []
+    if not rows:
+        return 0.01
+
+    sql_lower = (sql or "").lower()
+    hot_query = any(keyword in sql_lower for keyword in ("null", "dup", "duplicate", "group by", "having", "count(", "is null"))
+
+    def row_has_signal(row: dict[str, Any]) -> bool:
+        for value in row.values():
+            if value is None:
+                return True
+            if isinstance(value, (int, float)) and value > 0:
+                return True
+            if isinstance(value, str) and value.strip().lower() in {"null", "n/a", "na", "unknown", "none", "-", ""}:
+                return True
+        return False
+
+    if hot_query and any(row_has_signal(row) for row in rows):
+        return 0.1
+    return 0.01

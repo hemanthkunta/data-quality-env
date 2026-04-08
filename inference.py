@@ -21,6 +21,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.2-3B-Instruct")
 
 client: OpenAI | None = None
 FORCE_HEURISTIC = os.environ.get("FORCE_HEURISTIC", "0") == "1"
+FALLBACK_SQL = "SELECT 1 AS fallback"
 
 SEED = int(os.environ.get("SEED", "42"))
 TEMPERATURE = 0.1
@@ -29,7 +30,16 @@ MAX_AUDIT_STEPS = 9
 FIX_STEPS = 3
 WALL_LIMIT = 15 * 60
 
-SYSTEM_PROMPT = """You are a data quality auditor AI agent. You investigate dirty SQL datasets.
+SYSTEM_PROMPT = """You are a SQL Data Auditor.
+
+CRITICAL RULES:
+- Only reason about and reference tables listed in the current observation.
+- Current available tables will be provided in the user message; never query or invent tables outside that list.
+- Never invent table names.
+- When producing JSON, return valid JSON only.
+- When producing SQL, return a single raw SELECT statement only.
+
+You investigate dirty SQL datasets.
 
 AVAILABLE ACTIONS (respond with JSON only, no extra text):
 
@@ -112,7 +122,24 @@ def parse_action(text: str) -> dict:
                 return json.loads(m.group())
             except Exception:
                 pass
-    return {"action_type": "query", "sql": "SELECT 1 AS fallback"}
+    return {"action_type": "query", "sql": FALLBACK_SQL}
+
+
+def parse_model_action(response_text: str) -> str:
+    """Extract a raw SQL query from a model response, tolerating markdown and accidental JSON."""
+    clean_text = re.sub(r"```sql|```", "", (response_text or "")).strip()
+
+    if clean_text.startswith("{"):
+        try:
+            data = json.loads(clean_text)
+            return str(data.get("query") or data.get("sql") or FALLBACK_SQL)
+        except Exception:
+            pass
+
+    if clean_text.upper().startswith("SELECT"):
+        return clean_text
+
+    return FALLBACK_SQL
 
 
 def normalize_report(report: dict | None) -> dict:
@@ -204,14 +231,14 @@ def coerce_action(raw: str, task_id: int, step: int, total_steps: int) -> dict:
         # Close episode safely near step limit.
         if step >= total_steps - 1:
             return fallback_submit_action(task_id)
-        return {"action_type": "query", "sql": "SELECT 1 AS fallback"}
+        return {"action_type": "query", "sql": parse_model_action(raw)}
 
     if at == "query":
         sql = str(parsed.get("sql", "")).strip()
         if not sql:
             if step >= total_steps - 1:
                 return fallback_submit_action(task_id)
-            return {"action_type": "query", "sql": "SELECT 1 AS fallback"}
+            return {"action_type": "query", "sql": parse_model_action(raw)}
         if step >= total_steps - 1:
             return fallback_submit_action(task_id)
         return {"action_type": "query", "sql": sql}
@@ -222,7 +249,7 @@ def coerce_action(raw: str, task_id: int, step: int, total_steps: int) -> dict:
     # fix_sql is allowed only in fix phase after submit; avoid using it in audit loop.
     if step >= total_steps - 1:
         return fallback_submit_action(task_id)
-    return {"action_type": "query", "sql": "SELECT 1 AS fallback"}
+    return {"action_type": "query", "sql": parse_model_action(raw)}
 
 
 def llm_ready() -> tuple[bool, str]:
@@ -273,19 +300,28 @@ def _extract_json_object(text: str) -> dict | None:
 def llm_refine_report(task_id: int, obs: dict, evidence: dict, base_report: dict) -> dict:
     if client is None:
         return base_report
+    table_names = ", ".join(sorted((obs.get("tables", {}) or {}).keys())) or "<none>"
     prompt = {
         "task_id": task_id,
         "task_description": obs.get("task_description", ""),
         "tables": obs.get("tables", {}),
+        "current_available_tables": list((obs.get("tables", {}) or {}).keys()),
         "evidence": evidence,
         "base_report": base_report,
-        "instruction": "Return ONLY a valid JSON object for report with same schema fields. Keep numeric values grounded in evidence.",
+        "instruction": "Return ONLY a valid JSON object for report with same schema fields. Keep numeric values grounded in evidence and use only the listed tables.",
     }
     try:
         c = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a strict JSON report formatter for data quality audits."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a strict JSON report formatter for data quality audits. "
+                        f"Only use the current observation's tables: {table_names}. "
+                        "Do not invent tables. Do not change numeric evidence except to preserve it faithfully."
+                    ),
+                },
                 {"role": "user", "content": json.dumps(prompt)},
             ],
             temperature=0.0,
