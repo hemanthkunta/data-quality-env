@@ -55,6 +55,8 @@ class Task3(BaseTask):
         else:
             scores["ref_drift"] = 0.0
 
+        scores = {k: self.strict_score(v) for k, v in scores.items()}
+
         weights = {"mean_shift": 0.40, "new_cats": 0.35, "ref_drift": 0.25}
         total = sum(scores[k] * weights[k] for k in weights)
         return self.strict_score(round(total, 4)), scores

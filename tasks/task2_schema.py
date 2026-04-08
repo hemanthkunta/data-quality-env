@@ -48,6 +48,8 @@ class Task2(BaseTask):
         )
         scores["bad_amount"] = self.brier_adjust(0.8 if bad_detected else 0.0, 0.5, bad_detected)
 
+        scores = {k: self.strict_score(v) for k, v in scores.items()}
+
         weights = {"amount_type": 0.25, "date_format": 0.25, "neg_qty": 0.25, "bad_amount": 0.25}
         total = sum(scores[k] * weights[k] for k in weights)
         return self.strict_score(round(total, 4)), scores

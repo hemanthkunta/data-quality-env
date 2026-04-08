@@ -116,6 +116,10 @@ def step(payload: dict):
                 raise HTTPException(400, "Report already submitted. Use fix_sql or reset.")
 
             base_score, score_breakdown = task.grade(action.report, gold)
+            score_breakdown = {
+                k: BaseTask.strict_score(v) if isinstance(v, (int, float)) else v
+                for k, v in score_breakdown.items()
+            }
             budget_bonus = round(min(0.10, state.query_credits * 0.01), 4)
             total = BaseTask.strict_score(round(min(1.0, base_score + budget_bonus), 4))
 

@@ -37,6 +37,8 @@ class Task1(BaseTask):
         near_detected = any("near" in str(v.get("issue_type", "")).lower() for v in report.schema_violations)
         scores["near_dups"] = 0.5 if near_detected else 0.0
 
+        scores = {k: self.strict_score(v) for k, v in scores.items()}
+
         weights = {"null_email": 0.30, "null_cid": 0.25, "exact_dups": 0.30, "near_dups": 0.15}
         total = sum(scores[k] * weights[k] for k in weights)
         return self.strict_score(round(total, 4)), scores
